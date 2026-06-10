@@ -158,4 +158,10 @@ export const T = {
   },
 } as const
 
-export type Translations = typeof T['en']
+
+// Use en as base type but allow any string/function values for VI compatibility
+export type Translations = {
+  [K in keyof typeof T['en']]: typeof T['en'][K] extends (...args: any[]) => string
+    ? (...args: any[]) => string
+    : string
+}
