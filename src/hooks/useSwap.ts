@@ -8,16 +8,25 @@ import { addHistory } from '../lib/history'
 export type SwapStatus = 'idle' | 'estimating' | 'ready' | 'swapping' | 'done' | 'error'
 export interface SwapEstimate { estimatedOutput: string }
 
-// Proxy patch: CORS fix for dev
+// Proxy patch: route Circle API through local proxy to fix CORS
+// Dev: Vite proxy at /circle-api
+// Production: Cloudflare Pages Function at /circle-proxy
 function patchFetchForProxy() {
   if (typeof window === 'undefined') return
   const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  if (!isDev) return
+  const proxyBase = isDev ? '/circle-api' : '/circle-proxy'
   const orig = window.fetch.bind(window)
   window.fetch = async (input: any, init?: any) => {
     const url = typeof input === 'string' ? input : input?.url ?? ''
     if (url.startsWith('https://api.circle.com')) {
-      return orig(url.replace('https://api.circle.com', '/circle-api'), init)
+      // Strip x-user-agent header that causes CORS preflight failure
+      const newInit = { ...init }
+      if (newInit.headers) {
+        const h = new Headers(newInit.headers as any)
+        h.delete('x-user-agent')
+        newInit.headers = h
+      }
+      return orig(url.replace('https://api.circle.com', proxyBase), newInit)
     }
     return orig(input, init)
   }
